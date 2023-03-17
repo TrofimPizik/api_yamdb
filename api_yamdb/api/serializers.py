@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from rest_framework.validators import UniqueTogetherValidator
 import datetime as dt
 
 
@@ -7,72 +8,46 @@ from reviews.models import Category, Genre, Title, Review, Comment, GenreTitle
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
-        fields = ('id', 'name', 'slug')
+        fields = ('id', 'name', 'slug',)
         model = Category
 
 
 class GenreSerializer(serializers.ModelSerializer):
     class Meta:
-        fields = ('id', 'name', 'slug')
+        fields = ('id', 'name', 'slug',)
         model = Genre
 
 
 class TitleSerializer(serializers.ModelSerializer):
-    category = serializers.SlugRelatedField( 
-        slug_field='name',
-        queryset=Category.objects.all()
-    )
-    genre = GenreSerializer(required=False, many=True)
+    category = CategorySerializer(required=False,read_only=True)
+    genre = GenreSerializer(many=True,required=False,read_only=True)
     class Meta:
-        fields = ('id', 'name', 'year', 'category', 'genre', 'pub_date')
+        fields = ('id', 'name', 'year', 'category', 'genre', 'pub_date',)
         model = Title
 
-    def validate_year(self, value):
-        year = dt.date.today().year
-        if (value > year):
-            raise serializers.ValidationError('Проверьте год!')
-        return value
     
-    def create(self, validated_data):
-        if 'genre' not in self.initial_data:
-            title = Title.objects.create(**validated_data)
-            return title
-        
-        genres = validated_data.pop('ganre')
-        title = Title.objects.create(**validated_data)
+class TitleAddSerializer(serializers.ModelSerializer):
+     category = serializers.SlugRelatedField(
+         queryset=Category.objects.all(), slug_field='slug',
+     )
+     genre = serializers.SlugRelatedField(
+         queryset=Genre.objects.all(), slug_field='slug', many=True,
+     )
 
-        for genre in genres:
-            current_genre, status = Genre.objects.get_or_create(
-                **genre)
-            GenreTitle.objects.create(
-                genre_id=current_genre, title_id=title)
-        return title 
-    
-    def update(self, instance, validated_data):
-        instance.name = validated_data.get('name', instance.name)
-        instance.year = validated_data.get('year', instance.year)
-        instance.category = validated_data.get('category', instance.category)
-        instance.pub_date = validated_data.get(
-            'pub_date', instance.pub_date
-            )
-        if 'genre' in validated_data:
-            genres_data = validated_data.pop('genre')
-            lst = []
-            for genre in genres_data:
-                current_genre, status = Genre.objects.get_or_create(
-                    **genre
-                    )
-                lst.append(current_genre)
-            instance.genre.set(lst)
+     class Meta:
+         fields = ('id', 'name', 'year', 'category', 'genre', 'pub_date',)
+         model = Title
 
-        instance.save()
-        return instance
-
+     def validate_year(self, value):
+         year = dt.date.today().year
+         if year < value:
+             raise serializers.ValidationError('Проверьте год!')
+         return value
 
 class ReviewSerializer(serializers.ModelSerializer):
     title = serializers.SlugRelatedField(
+        read_only=True,
         slug_field='name',
-        queryset=Review.objects.all()
     )
     author = serializers.SlugRelatedField(
         read_only=True, 
@@ -80,9 +55,19 @@ class ReviewSerializer(serializers.ModelSerializer):
         slug_field='username'
     )
     class Meta:
-        fields = ('id', 'title', 'text', 'score', 'author', 'pub_date')
+        fields = ('id', 'title', 'text', 'score', 'author', 'pub_date',)
         model = Review
         read_only_fields = ('author', 'title')
+        validators = [
+             UniqueTogetherValidator(
+                 queryset=Review.objects.all(),
+                 fields=('author', 'title'),
+                 message=(
+                     'Нельзя оставлять оценку дважды '
+                     'на одного и тот же фильм.'
+                 ),
+             )
+         ]
 
 
 class CommentSerializer(serializers.ModelSerializer):
@@ -95,4 +80,4 @@ class CommentSerializer(serializers.ModelSerializer):
     class Meta:
         fields = ('id', 'review', 'text', 'author', 'pub_date')
         model = Comment
-        read_only_fields = ('author', 'review')
+        read_only_fields = ('author',)

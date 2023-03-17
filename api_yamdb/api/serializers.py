@@ -50,29 +50,22 @@ class TitleAddSerializer(serializers.ModelSerializer):
 
 
 class ReviewSerializer(serializers.ModelSerializer):
-    author = SlugRelatedField(
-        read_only=True,
-        slug_field='username',
-        default=serializers.CurrentUserDefault(),
-    )
-    title = SlugRelatedField(
-        queryset=Title.objects.all(), slug_field='name',
-    )
+    author = SlugRelatedField(read_only=True, slug_field='username',)
 
     class Meta:
-        # fields = ('id', 'author', 'text', 'pub_date', 'score',)
-        fields = '__all__'
+        # fields = '__all__'
+        fields = ('id', 'author', 'text', 'pub_date', 'score',)
         model = Review
-        validators = [
-            UniqueTogetherValidator(
-                queryset=Review.objects.all(),
-                fields=('author', 'title'),
-                message=(
-                    'Нельзя оставлять оценку дважды '
-                    'на одного и тот же фильм.'
-                ),
-            )
-        ]
+        # validators = [
+        #     UniqueTogetherValidator(
+        #         queryset=Review.objects.all(),
+        #         fields=('author', 'title'),
+        #         message=(
+        #             'Нельзя подписаться дважды '
+        #             'на одного и того же пользователя.'
+        #         ),
+        #     )
+        # ]
 
 
 class CommentSerializer(serializers.ModelSerializer):
@@ -80,6 +73,5 @@ class CommentSerializer(serializers.ModelSerializer):
     author = SlugRelatedField(read_only=True, slug_field='username',)
 
     class Meta:
-        # fields = ('id', 'author', 'text', 'pub_date', 'review')
         fields = '__all__'
         model = Comment

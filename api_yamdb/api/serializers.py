@@ -14,8 +14,9 @@ class SingUpSerializer(serializers.Serializer):
         )]        
     )
     email = serializers.EmailField(required=True, max_length=254)
-
+    
     class Meta:
+        
         model = User
         fields = ('username', 'email')
 
@@ -26,13 +27,6 @@ class SingUpSerializer(serializers.Serializer):
         if value == 'me':
             raise serializers.ValidationError('Недопустимое имя пользователя')
         return value
-
-    def create(self, validated_data):
-        user = User.objects.create(
-            username=self.validated_data['username'],
-            email=self.validated_data['email'],
-        )
-        return user
 
 
 class SendTokenSerializer(serializers.Serializer):

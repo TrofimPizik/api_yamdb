@@ -20,13 +20,15 @@ class Genre(models.Model):
 class Title(models.Model):
     name = models.CharField(max_length=200, verbose_name='Название произведения')
     year = models.IntegerField(verbose_name='Год создания произведения')
+    rating = models.IntegerField(blank=True,
+    null=True, verbose_name='Рейтинг произведения')
+    description = models.TextField(blank=True,
+    null=True, verbose_name='Описание произведения')
     category = models.ForeignKey(
         Category, on_delete=models.SET_NULL,
     null=True, related_name='titles', verbose_name='Категория произведения')
     genre = models.ManyToManyField(Genre, through='GenreTitle', verbose_name='Жанр произведения')
-    pub_date = models.DateTimeField(
-        'Дата добавления', auto_now_add=True)
-    
+
     def __str__(self):
         return self.name  
 

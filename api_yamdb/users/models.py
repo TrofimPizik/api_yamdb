@@ -25,4 +25,8 @@ class User(AbstractUser):
         verbose_name="О себе",
         blank=True,
         null=True,
-    ) 
+    )
+    confirmation_code = models.CharField(
+        max_length=254, default='XXXX', null=True
+    )
+

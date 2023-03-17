@@ -1,20 +1,28 @@
-from rest_framework.views import APIView
-from django.db import IntegrityError
-from rest_framework.response import Response
-from rest_framework import status, generics, filters
-from django.contrib.auth.tokens import default_token_generator, PasswordResetTokenGenerator
-from rest_framework_simplejwt.tokens import RefreshToken
+import django_filters
 from django.shortcuts import get_object_or_404
-from django.core.mail import send_mail
-from rest_framework import viewsets, permissions
+
+from rest_framework import filters, mixins, viewsets, permissions, generics, status
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
+
 from rest_framework.decorators import action
 from rest_framework.pagination import LimitOffsetPagination
 
-from api.serializers import SingUpSerializer, SendTokenSerializer, UserSerializer, UserNotAdminSerializer
+from api.permissions import AuthorAccess, ModeratorAccess, AdminAccess, AdminOnly
+from api.serializers import (
+    CategorySerializer, GenreSerializer, TitleSerializer,
+    TitleAddSerializer, ReviewSerializer, CommentSerializer,
+    SingUpSerializer, SendTokenSerializer, UserSerializer, 
+    UserNotAdminSerializer
+)
+from reviews.models import Category, Genre, Review, Title
 from users.models import User
 from api_yamdb.settings import EMAIL_HOST_USER
-from .permissions import AdminOnly
-
+from rest_framework.views import APIView
+from django.db import IntegrityError
+from rest_framework.response import Response
+from django.contrib.auth.tokens import default_token_generator, PasswordResetTokenGenerator
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.core.mail import send_mail
 
 class SignUp(APIView):
     """Функция регистрации новых пользователей"""
@@ -115,3 +123,86 @@ class UserMeViewSet(viewsets.ModelViewSet):
             serializer.save()    
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.data)
+
+class TitleFilter(django_filters.FilterSet):
+    category = django_filters.CharFilter(field_name='category__slug')
+    genre = django_filters.CharFilter(field_name='genre__slug')
+
+    class Meta:
+        model = Title
+        fields = ['name', 'year', ]
+
+
+class CategoryViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [IsAuthenticatedOrReadOnly & AdminAccess]
+    filter_backends = (filters.SearchFilter,)
+    search_fields = ['name', ]
+    lookup_field = 'slug'
+
+
+class GenreViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    queryset = Genre.objects.all()
+    serializer_class = GenreSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly & AdminAccess]
+    filter_backends = (filters.SearchFilter,)
+    search_fields = ['name', ]
+    lookup_field = 'slug'
+
+
+class TitleViewSet(viewsets.ModelViewSet):
+    queryset = Title.objects.all()
+    serializer_class = TitleSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly & AdminAccess]
+    filter_backends = (django_filters.rest_framework.DjangoFilterBackend,)
+    filterset_class = TitleFilter
+
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update', ]:
+            return TitleAddSerializer
+        return self.serializer_class
+
+
+class ReviewViewSet(viewsets.ModelViewSet):
+    serializer_class = ReviewSerializer
+    permission_classes = [
+        IsAuthenticatedOrReadOnly & (
+            AuthorAccess | ModeratorAccess | AdminAccess
+        )
+    ]
+
+    def get_queryset(self):
+        title = get_object_or_404(Title, id=self.kwargs.get('title_id'),)
+        return title.reviews.all()
+
+    def perform_create(self, serializer):
+        title = get_object_or_404(Title, id=self.kwargs.get('title_id'),)
+        serializer.save(author=self.request.user, title_id=title.id)
+
+
+class CommentViewSet(viewsets.ModelViewSet):
+    serializer_class = CommentSerializer
+    permission_classes = [
+        IsAuthenticatedOrReadOnly & (
+            AuthorAccess | ModeratorAccess | AdminAccess
+        )
+    ]
+
+    def get_queryset(self):
+        review = get_object_or_404(Review, id=self.kwargs.get('review_id'),)
+        return review.comments.all()
+
+    def perform_create(self, serializer):
+        review = get_object_or_404(Review, id=self.kwargs.get('review_id'),)
+        serializer.save(author=self.request.user, review_id=review.id)

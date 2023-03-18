@@ -1,33 +1,32 @@
 import datetime as dt
 
-from rest_framework import serializers
 from django.core.validators import RegexValidator
+from django.db.models import Sum
+from rest_framework import serializers
 from rest_framework.relations import SlugRelatedField
-from rest_framework.validators import UniqueTogetherValidator
 
 from reviews.models import Category, Comment, Genre, Review, Title
 from users.models import User
 
+
 class SingUpSerializer(serializers.Serializer):
-    """Сериализатор для регистрации"""
+    """Сериализатор для регистрации."""
+
     username = serializers.CharField(
         required=True,
         max_length=150,
         validators=[RegexValidator(
             regex=r'^[\w.@+-+\\z]'
-        )]        
+        )]
     )
     email = serializers.EmailField(required=True, max_length=254)
-    
+
     class Meta:
-        
         model = User
         fields = ('username', 'email')
 
     def validate_username(self, value):
-        """
-        Проверяет невозможность создания пользователя с ником 'me'
-        """
+        """Проверяет невозможность создания пользователя с ником 'me'."""
         if value == 'me':
             raise serializers.ValidationError('Недопустимое имя пользователя')
         return value
@@ -35,12 +34,13 @@ class SingUpSerializer(serializers.Serializer):
 
 class SendTokenSerializer(serializers.Serializer):
     """Сериализатор для функции предоставления токена."""
+
     username = serializers.CharField(
         required=True,
         max_length=150,
         validators=[RegexValidator(
             regex=r'^[\w.@+-+\\z]'
-        )]        
+        )]
     )
     confirmation_code = serializers.CharField(required=True)
 
@@ -50,7 +50,7 @@ class SendTokenSerializer(serializers.Serializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
-    """Сериализатор данных пользователя и админастратора"""
+    """Сериализатор данных пользователя и админастратора."""
 
     class Meta:
         model = User
@@ -65,7 +65,7 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class UserNotAdminSerializer(serializers.ModelSerializer):
-    """Сериализатор данных пользователя"""
+    """Сериализатор данных пользователя."""
 
     class Meta:
         model = User
@@ -78,6 +78,7 @@ class UserNotAdminSerializer(serializers.ModelSerializer):
             'role',
         )
         read_only_fields = ('role',)
+
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -92,9 +93,9 @@ class GenreSerializer(serializers.ModelSerializer):
 
 
 class TitleSerializer(serializers.ModelSerializer):
-    category = CategorySerializer(required=False)
-    genre = GenreSerializer(many=True, read_only=True)
-    rating = serializers.IntegerField(default=None)
+    category = CategorySerializer(required=False,)
+    genre = GenreSerializer(many=True, read_only=True,)
+    rating = serializers.IntegerField(default=None,)
 
     class Meta:
         fields = '__all__'
@@ -108,7 +109,7 @@ class TitleAddSerializer(serializers.ModelSerializer):
     genre = SlugRelatedField(
         queryset=Genre.objects.all(), slug_field='slug', many=True,
     )
-    rating = serializers.IntegerField(default=None)
+    rating = serializers.FloatField(default=None,)
 
     class Meta:
         fields = '__all__'
@@ -125,23 +126,31 @@ class ReviewSerializer(serializers.ModelSerializer):
     author = SlugRelatedField(read_only=True, slug_field='username',)
 
     class Meta:
-        # fields = '__all__'
         fields = ('id', 'author', 'text', 'pub_date', 'score',)
         model = Review
-        # validators = [
-        #     UniqueTogetherValidator(
-        #         queryset=Review.objects.all(),
-        #         fields=('author', 'title'),
-        #         message=(
-        #             'Нельзя подписаться дважды '
-        #             'на одного и того же пользователя.'
-        #         ),
-        #     )
-        # ]
+
+    def create(self, validated_data):
+        title_score_sum = Review.objects.filter(
+            title_id=validated_data['title_id']
+        ).aggregate(Sum('score'))
+        if title_score_sum['score__sum']:
+            title_score_sum['score__sum'] += validated_data['score']
+            rating = (
+                title_score_sum['score__sum']
+                / (Review.objects.filter(
+                    title_id=validated_data['title_id']
+                ).count() + 1)
+            )
+        else:
+            rating = validated_data['score']
+        Title.objects.filter(
+            id=validated_data['title_id']
+        ).update(rating=rating)
+        return Review.objects.create(**validated_data)
 
 
 class CommentSerializer(serializers.ModelSerializer):
-    review = serializers.PrimaryKeyRelatedField(read_only=True)
+    review = serializers.PrimaryKeyRelatedField(read_only=True,)
     author = SlugRelatedField(read_only=True, slug_field='username',)
 
     class Meta:

@@ -12,6 +12,7 @@ ROLES = (
     (ADMIN, ADMIN),
 )
 
+
 class User(AbstractUser):
     role = models.CharField(
         choices=ROLES,
@@ -26,13 +27,21 @@ class User(AbstractUser):
             regex=r'^[\w.@+-+\\z]'
         )]
     )
-    first_name = models.CharField(verbose_name='Имя', max_length=150, blank=True, null=True)
-    last_name = models.CharField(verbose_name='Фамилия', max_length=150, blank=True, null=True)
-    email = models.EmailField(verbose_name='E-Mail', max_length=254, unique=True)
+    first_name = models.CharField(
+        verbose_name='Имя', max_length=150,
+        blank=True, null=True
+    )
+    last_name = models.CharField(
+        verbose_name='Фамилия', max_length=150,
+        blank=True, null=True
+    )
+    email = models.EmailField(
+        verbose_name='E-Mail', max_length=254,
+        unique=True
+    )
     bio = models.TextField(verbose_name="О себе", blank=True, null=True)
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username', ]
-
 
     @property
     def is_user(self):

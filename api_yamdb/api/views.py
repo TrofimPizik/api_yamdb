@@ -56,8 +56,6 @@ class SignUp(APIView):
             or User.objects.filter(username=username).exists()
         ):
             return Response('', status=status.HTTP_400_BAD_REQUEST,)
-        print(username)
-        print(email)
         user, created = User.objects.filter(
             Q(email=email) | Q(username=username)
         ).get_or_create(email=email, username=username, is_active=False,)

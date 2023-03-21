@@ -1,7 +1,7 @@
 import django_filters
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core.mail import send_mail
-from django.db.models import Q
+from django.db.models import Avg, Q
 from django.shortcuts import get_object_or_404
 from rest_framework import filters, mixins, permissions, status, viewsets
 from rest_framework.decorators import action
@@ -27,6 +27,17 @@ from users.models import User
 from api_yamdb.settings import EMAIL_HOST_USER
 
 
+def singup_mail(target_email, user):
+    confirmation_code = PasswordResetTokenGenerator().make_token(user)
+    return send_mail(
+        'Добро пожаловать!',
+        f'Ваш код подтверждения: {confirmation_code,}',
+        EMAIL_HOST_USER,
+        [target_email],
+        fail_silently=True,
+    )
+
+
 class SignUp(APIView):
     """Функция регистрации новых пользователей."""
 
@@ -38,35 +49,22 @@ class SignUp(APIView):
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data['email']
         username = serializer.validated_data['username']
-        if (
-            User.objects.filter(email=email, username=username).exists()
-        ):
-            user = User.objects.get(email=email)
-            confirmation_code = PasswordResetTokenGenerator().make_token(user)
-            send_mail(
-                'Добро пожаловать!',
-                f'Ваш код подтверждения: {confirmation_code,}',
-                EMAIL_HOST_USER,
-                [email],
-                fail_silently=True,
-            )
+        user = User.objects.filter(email=email, username=username).first()
+        if user:
+            singup_mail(email, user)
             return Response(serializer.data, status=status.HTTP_200_OK,)
         if (
             User.objects.filter(email=email).exists()
             or User.objects.filter(username=username).exists()
         ):
-            return Response('', status=status.HTTP_400_BAD_REQUEST,)
+            return Response(
+                'Указанный email или username уже в использовании',
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         user, created = User.objects.filter(
             Q(email=email) | Q(username=username)
         ).get_or_create(email=email, username=username, is_active=False,)
-        confirmation_code = PasswordResetTokenGenerator().make_token(user)
-        send_mail(
-            'Добро пожаловать!',
-            f'Ваш код подтверждения: {confirmation_code,}',
-            EMAIL_HOST_USER,
-            [email],
-            fail_silently=True,
-        )
+        singup_mail(email, user)
         return Response(serializer.data, status=status.HTTP_200_OK,)
 
 
@@ -81,14 +79,7 @@ class SendToken(APIView):
         serializer.is_valid(raise_exception=True)
         username = serializer.validated_data['username']
         confirmation_code = serializer.validated_data['confirmation_code']
-        try:
-            user = get_object_or_404(
-                User,
-                username=username,
-            )
-        except User.DoesNotExist:
-            return Response('Ошибка в username',
-                            status=status.HTTP_404_NOT_FOUND)
+        user = get_object_or_404(User, username=username,)
         if not PasswordResetTokenGenerator().check_token(
             user, confirmation_code
         ):
@@ -180,7 +171,7 @@ class GenreViewSet(
 
 
 class TitleViewSet(viewsets.ModelViewSet):
-    queryset = Title.objects.all()
+    queryset = Title.objects.annotate(rating=Avg('reviews__score'),)
     serializer_class = TitleSerializer
     permission_classes = [IsAuthenticatedOrReadOnly & AdminAccess]
     filter_backends = (django_filters.rest_framework.DjangoFilterBackend,)
@@ -224,9 +215,17 @@ class CommentViewSet(viewsets.ModelViewSet):
     ]
 
     def get_queryset(self):
-        review = get_object_or_404(Review, id=self.kwargs.get('review_id'),)
+        review = get_object_or_404(
+            Review,
+            id=self.kwargs.get('review_id'),
+            title__id=self.kwargs.get('title_id'),
+        )
         return review.comments.all()
 
     def perform_create(self, serializer):
-        review = get_object_or_404(Review, id=self.kwargs.get('review_id'),)
+        review = get_object_or_404(
+            Review,
+            id=self.kwargs.get('review_id'),
+            title__id=self.kwargs.get('title_id'),
+        )
         serializer.save(author=self.request.user, review_id=review.id)

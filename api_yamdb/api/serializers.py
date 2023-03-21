@@ -1,7 +1,6 @@
 import datetime as dt
 
 from django.core.validators import RegexValidator
-from django.db.models import Sum
 from rest_framework import serializers
 from rest_framework.relations import SlugRelatedField
 
@@ -109,7 +108,6 @@ class TitleAddSerializer(serializers.ModelSerializer):
     genre = SlugRelatedField(
         queryset=Genre.objects.all(), slug_field='slug', many=True,
     )
-    rating = serializers.FloatField(default=None,)
 
     class Meta:
         fields = '__all__'
@@ -128,25 +126,6 @@ class ReviewSerializer(serializers.ModelSerializer):
     class Meta:
         fields = ('id', 'author', 'text', 'pub_date', 'score',)
         model = Review
-
-    def create(self, validated_data):
-        title_score_sum = Review.objects.filter(
-            title_id=validated_data['title_id']
-        ).aggregate(Sum('score'))
-        if title_score_sum['score__sum']:
-            title_score_sum['score__sum'] += validated_data['score']
-            rating = (
-                title_score_sum['score__sum']
-                / (Review.objects.filter(
-                    title_id=validated_data['title_id']
-                ).count() + 1)
-            )
-        else:
-            rating = validated_data['score']
-        Title.objects.filter(
-            id=validated_data['title_id']
-        ).update(rating=rating)
-        return Review.objects.create(**validated_data)
 
 
 class CommentSerializer(serializers.ModelSerializer):

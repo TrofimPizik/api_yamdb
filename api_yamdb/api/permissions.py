@@ -1,5 +1,7 @@
 from rest_framework import permissions
 
+from users.models import User
+
 
 class AuthorAccess(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
@@ -13,7 +15,7 @@ class ModeratorAccess(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         return (
             request.method in permissions.SAFE_METHODS
-            or request.user.role == 'moderator'
+            or request.user.role == User.MODERATOR
         )
 
 
@@ -21,13 +23,13 @@ class AdminAccess(permissions.BasePermission):
     def has_permission(self, request, view,):
         return (
             request.method in permissions.SAFE_METHODS
-            or request.user.role == 'admin'
+            or request.user.role == User.ADMIN
         )
 
     def has_object_permission(self, request, view, obj):
         return (
             request.method in permissions.SAFE_METHODS
-            or request.user.role == 'admin'
+            or request.user.role == User.ADMIN
         )
 
 
